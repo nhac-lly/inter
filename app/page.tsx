@@ -1,3 +1,4 @@
+"use client";
 import dynamic from "next/dynamic";
 
 // Dynamically import the livestream viewer to avoid SSR issues
