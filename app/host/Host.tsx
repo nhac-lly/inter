@@ -19,13 +19,19 @@ export default function Host() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Enable both video and audio capture for screen sharing
   const { screenTrack, error: screenError } = useLocalScreenTrack(
     screenShareOn,
-    {},
-    "auto"
+    {
+      // Screen video configuration
+      optimizationMode: "detail",
+      encoderConfig: "1080p_1",
+    },
+    "enable" // Enable audio capture
   );
 
-  console.log(agoraConfig);
+  console.log("Host agoraConfig:", agoraConfig);
+  console.log("Host screenTrack:", screenTrack);
 
   // Generate token when component mounts or when starting screen share
   useEffect(() => {
@@ -58,37 +64,87 @@ export default function Host() {
     setScreenShareOn(!screenShareOn);
   };
 
+  // Check if we have audio and video tracks
+  const hasAudioTrack =
+    screenTrack && Array.isArray(screenTrack) && screenTrack.length > 1;
+  const hasVideoTrack = screenTrack !== null;
+
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <div className="flex flex-col items-center justify-center h-screen">
-        <div className="mb-4 space-y-2">
-          <button
-            className="btn px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={handleToggleScreenShare}
-            disabled={loading || (screenShareOn && !agoraConfig)}
-          >
-            {loading
-              ? "Generating Token..."
-              : screenShareOn
-              ? "Stop Screen Share"
-              : "Start Screen Share"}
-          </button>
+      <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white">
+        <div className="mb-4 space-y-4 text-center">
+          <div className="bg-gray-800 p-6 rounded-lg max-w-md">
+            <h2 className="text-2xl font-bold mb-4">🎥 Host Control Panel</h2>
 
-          {agoraConfig && (
-            <div className="text-sm text-gray-600 bg-gray-100 p-2 rounded">
-              Channel: {agoraConfig.channel} | UID: {agoraConfig.uid}
-            </div>
-          )}
+            <button
+              className="btn px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleToggleScreenShare}
+              disabled={loading || (screenShareOn && !agoraConfig)}
+            >
+              {loading
+                ? "Generating Token..."
+                : screenShareOn
+                ? "Stop Screen Share"
+                : "Start Screen Share"}
+            </button>
+
+            {agoraConfig && (
+              <div className="mt-4 text-sm text-gray-300 bg-gray-700 p-3 rounded">
+                <div>
+                  Channel:{" "}
+                  <span className="text-blue-300">{agoraConfig.channel}</span>
+                </div>
+                <div>
+                  Host UID:{" "}
+                  <span className="text-green-300">{agoraConfig.uid}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Track Status */}
+            {screenShareOn && screenTrack && (
+              <div className="mt-4 space-y-2">
+                <div className="bg-gray-700 p-3 rounded">
+                  <div className="text-sm font-semibold mb-2">
+                    📡 Broadcasting Status:
+                  </div>
+                  <div className="text-xs space-y-1">
+                    <div
+                      className={
+                        hasVideoTrack ? "text-green-400" : "text-red-400"
+                      }
+                    >
+                      📹 Video: {hasVideoTrack ? "Active" : "Inactive"}
+                    </div>
+                    <div
+                      className={
+                        hasAudioTrack ? "text-green-400" : "text-red-400"
+                      }
+                    >
+                      🔊 Audio: {hasAudioTrack ? "Active" : "Inactive"}
+                    </div>
+                  </div>
+                </div>
+
+                {!hasAudioTrack && (
+                  <div className="bg-yellow-600 p-2 rounded text-xs">
+                    ⚠️ No audio detected. Make sure to select "Share audio" when
+                    sharing your screen.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          <div className="mb-4 p-3 bg-red-600 border border-red-400 text-white rounded max-w-md">
             {error}
           </div>
         )}
 
         {screenError && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+          <div className="mb-4 p-3 bg-red-600 border border-red-400 text-white rounded max-w-md">
             Screen share error: {screenError.message}
           </div>
         )}

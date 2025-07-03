@@ -73,24 +73,46 @@ export const ScreenShare = ({
       setScreenVideoTrack(null);
     } else {
       if (Array.isArray(screenTrack)) {
-        setScreenVideoTrack(
-          screenTrack.filter(
-            (track: ILocalTrack) => track.trackMediaType === "video"
-          )[0] as ILocalVideoTrack
-        );
-        setScreenAudioTrack(
-          screenTrack.filter(
-            (track: ILocalTrack) => track.trackMediaType === "audio"
-          )[0] as ILocalAudioTrack
-        );
+        const videoTrack = screenTrack.filter(
+          (track: ILocalTrack) => track.trackMediaType === "video"
+        )[0] as ILocalVideoTrack;
+
+        const audioTrack = screenTrack.filter(
+          (track: ILocalTrack) => track.trackMediaType === "audio"
+        )[0] as ILocalAudioTrack;
+
+        setScreenVideoTrack(videoTrack);
+        setScreenAudioTrack(audioTrack);
+
+        console.log("Screen tracks:", {
+          hasVideo: !!videoTrack,
+          hasAudio: !!audioTrack,
+        });
       } else {
         setScreenVideoTrack(screenTrack);
+        console.log("Screen track (video only):", { hasVideo: !!screenTrack });
       }
     }
   }, [screenTrack]);
 
-  //publish screen share
-  usePublish([screenVideoTrack, screenAudioTrack], screenShareOn, client);
+  //publish screen share - ensure both video and audio are published
+  const tracksToPublish = [screenVideoTrack, screenAudioTrack].filter(Boolean);
+  usePublish(tracksToPublish, screenShareOn, client);
+
+  // Log publishing status
+  useEffect(() => {
+    if (screenShareOn && tracksToPublish.length > 0) {
+      console.log(`Publishing ${tracksToPublish.length} tracks:`, {
+        video: !!screenVideoTrack,
+        audio: !!screenAudioTrack,
+      });
+    }
+  }, [
+    screenShareOn,
+    tracksToPublish.length,
+    screenVideoTrack,
+    screenAudioTrack,
+  ]);
 
   //screen share closed
   useTrackEvent(screenVideoTrack, "track-ended", () => {
@@ -101,16 +123,37 @@ export const ScreenShare = ({
   return (
     <AgoraRTCProvider client={client}>
       <AgoraRTCScreenShareProvider client={client}>
+        {/* Video Track Display */}
         {screenShareOn && screenVideoTrack && (
-          <LocalVideoTrack
-            disabled={!screenShareOn}
-            play={screenShareOn}
-            style={{ width: "90vw", height: "90vh" }}
-            track={screenVideoTrack}
-          />
+          <div className="relative">
+            <LocalVideoTrack
+              disabled={!screenShareOn}
+              play={screenShareOn}
+              style={{ width: "90vw", height: "90vh" }}
+              track={screenVideoTrack}
+            />
+            {/* Audio indicator */}
+            <div className="absolute top-4 right-4 bg-black bg-opacity-50 px-3 py-1 rounded-full">
+              <span className="text-sm font-semibold text-white">
+                {screenAudioTrack ? "🔊 Audio Enabled" : "🔇 No Audio"}
+              </span>
+            </div>
+          </div>
         )}
+
+        {/* Audio Track - Hidden but still published */}
         {screenAudioTrack && (
           <LocalAudioTrack disabled={!screenShareOn} track={screenAudioTrack} />
+        )}
+
+        {/* Publishing Status */}
+        {screenShareOn && (
+          <div className="mt-4 text-center">
+            <div className="bg-gray-800 px-4 py-2 rounded-lg text-sm">
+              📡 Broadcasting: Video {screenVideoTrack ? "✅" : "❌"} | Audio{" "}
+              {screenAudioTrack ? "✅" : "❌"}
+            </div>
+          </div>
         )}
       </AgoraRTCScreenShareProvider>
     </AgoraRTCProvider>

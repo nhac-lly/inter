@@ -22,6 +22,9 @@ function LivestreamViewerInner({
   client: IAgoraRTCClient;
   agoraConfig: AgoraTokenConfig;
 }) {
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [userInteracted, setUserInteracted] = useState(false);
+
   useJoin(
     {
       appid: agoraConfig.appId,
@@ -39,47 +42,71 @@ function LivestreamViewerInner({
   const { audioTracks } = useRemoteAudioTracks(remoteUsers);
   const { videoTracks } = useRemoteVideoTracks(remoteUsers);
 
-  // Play audio tracks
+  // Handle audio playback with user interaction
   useEffect(() => {
-    audioTracks.forEach((track) => {
-      track.play();
-    });
-  }, [audioTracks]);
+    if (audioTracks.length > 0 && userInteracted) {
+      audioTracks.forEach(async (track) => {
+        try {
+          await track.play();
+          console.log(`Playing audio track from user ${track.getUserId()}`);
+          setAudioEnabled(true);
+        } catch (error) {
+          console.error("Failed to play audio track:", error);
+          // Audio autoplay blocked - user interaction required
+          setAudioEnabled(false);
+        }
+      });
+    }
+  }, [audioTracks, userInteracted]);
 
   // Log video tracks for debugging
   useEffect(() => {
     console.log("Video tracks:", videoTracks);
-  }, [videoTracks]);
+    console.log("Audio tracks:", audioTracks);
+  }, [videoTracks, audioTracks]);
 
   const hostUser = remoteUsers.find((user) => !!user.videoTrack);
 
-  // Force subscription to all remote users
-  useEffect(() => {
-    remoteUsers.forEach(async (user) => {
-      if (user.videoTrack && !user.videoTrack.isPlaying) {
-        try {
-          await client.subscribe(user, "video");
-          console.log(`Subscribed to video from user ${user.uid}`);
-        } catch (error) {
-          console.error(
-            `Failed to subscribe to video from user ${user.uid}:`,
-            error
-          );
+  // Enable audio with user interaction
+  const enableAudio = async () => {
+    setUserInteracted(true);
+    if (audioTracks.length > 0) {
+      try {
+        for (const track of audioTracks) {
+          await track.play();
+          console.log(`Enabled audio for user ${track.getUserId()}`);
         }
+        setAudioEnabled(true);
+      } catch (error) {
+        console.error("Failed to enable audio:", error);
       }
-      if (user.audioTrack && !user.audioTrack.isPlaying) {
+    }
+  };
+
+  const toggleAudio = async () => {
+    if (!userInteracted) {
+      enableAudio();
+      return;
+    }
+
+    if (audioEnabled) {
+      // Mute audio
+      audioTracks.forEach((track) => {
+        track.stop();
+      });
+      setAudioEnabled(false);
+    } else {
+      // Unmute audio
+      audioTracks.forEach(async (track) => {
         try {
-          await client.subscribe(user, "audio");
-          console.log(`Subscribed to audio from user ${user.uid}`);
+          await track.play();
         } catch (error) {
-          console.error(
-            `Failed to subscribe to audio from user ${user.uid}:`,
-            error
-          );
+          console.error("Failed to play audio:", error);
         }
-      }
-    });
-  }, [remoteUsers, client]);
+      });
+      setAudioEnabled(true);
+    }
+  };
 
   return (
     <>
@@ -94,22 +121,46 @@ function LivestreamViewerInner({
         </div>
       </div>
 
-      {/* Guest Counter */}
-      <div className="flex justify-center mb-4">
+      {/* Controls */}
+      <div className="flex justify-center mb-4 space-x-4">
+        {/* Guest Counter */}
         <div className="bg-green-600 px-4 py-2 rounded-full">
           <span className="text-sm font-semibold">
             👥 {remoteUsers.length} Guests Connected
           </span>
         </div>
+
+        {/* Audio Control */}
+        {audioTracks.length > 0 && (
+          <button
+            onClick={toggleAudio}
+            className={`px-4 py-2 rounded-full text-sm font-semibold ${
+              audioEnabled
+                ? "bg-green-600 hover:bg-green-700"
+                : "bg-red-600 hover:bg-red-700"
+            }`}
+          >
+            {audioEnabled ? "🔊 Audio On" : "🔇 Enable Audio"}
+          </button>
+        )}
       </div>
 
       {/* Debug Info */}
       <div className="flex justify-center mb-4">
         <div className="bg-blue-600 px-4 py-2 rounded-full text-xs">
-          Video Tracks: {videoTracks.length} | Audio Tracks:{" "}
-          {audioTracks.length}
+          Video: {videoTracks.length} | Audio: {audioTracks.length} |
+          {audioEnabled ? " 🔊 Playing" : " 🔇 Muted"}
         </div>
       </div>
+
+      {/* Audio Permission Notice */}
+      {audioTracks.length > 0 && !userInteracted && (
+        <div className="flex justify-center mb-4">
+          <div className="bg-yellow-600 px-4 py-2 rounded-lg text-sm">
+            Click "Enable Audio" to hear the stream audio
+          </div>
+        </div>
+      )}
 
       {/* Main Stream */}
       <div className="flex justify-center items-center">
@@ -128,6 +179,14 @@ function LivestreamViewerInner({
               <div className="absolute top-4 left-4 bg-red-600 px-3 py-1 rounded-full">
                 <span className="text-sm font-semibold">🔴 LIVE</span>
               </div>
+              {/* Audio indicator */}
+              {audioTracks.length > 0 && (
+                <div className="absolute top-4 right-4 bg-black bg-opacity-50 px-3 py-1 rounded-full">
+                  <span className="text-sm font-semibold">
+                    {audioEnabled ? "🔊" : "🔇"}
+                  </span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="w-full h-[500px] bg-gray-800 rounded-xl flex flex-col items-center justify-center text-gray-400 border-2 border-dashed border-gray-600">
@@ -150,8 +209,8 @@ export default function LivestreamViewer({
   const [client] = useState(() => {
     const agoraClient = AgoraRTC.createClient({ mode: "live", codec: "h265" });
 
-    // Enable auto-subscription for better reliability
-    // agoraClient.setClientRole("audience");
+    // Set client role as audience for proper subscription
+    agoraClient.setClientRole("audience");
 
     // Add event listeners for debugging
     agoraClient.on("user-published", (user, mediaType) => {
