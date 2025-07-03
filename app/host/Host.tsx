@@ -8,6 +8,8 @@ import {
   getDefaultChannel,
   type AgoraTokenConfig,
 } from "@/lib/server-actions";
+import { AudioMixer } from "@/app/components/AudioMixer";
+import type { ILocalAudioTrack } from "agora-rtc-react";
 
 const ScreenShare = dynamic(() => import("@/app/components/ScreenShare"), {
   ssr: false,
@@ -18,20 +20,46 @@ export default function Host() {
   const [agoraConfig, setAgoraConfig] = useState<AgoraTokenConfig | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mixedAudioTrack, setMixedAudioTrack] =
+    useState<ILocalAudioTrack | null>(null);
 
-  // Enable both video and audio capture for screen sharing
-  const { screenTrack, error: screenError } = useLocalScreenTrack(
-    screenShareOn,
-    {
-      // Screen video configuration
-      optimizationMode: "detail",
-      encoderConfig: "1080p_1",
-    },
-    "enable" // Enable audio capture
-  );
+  // Try to get screen sharing with audio first
+  const { screenTrack: screenTrackWithAudio, error: screenAudioError } =
+    useLocalScreenTrack(
+      screenShareOn,
+      {
+        optimizationMode: "detail",
+        encoderConfig: "1080p_1",
+      },
+      "enable" // Try to enable audio
+    );
+
+  // Fallback to video only if audio fails
+  const { screenTrack: screenTrackVideoOnly, error: screenVideoError } =
+    useLocalScreenTrack(
+      screenShareOn && !!screenAudioError,
+      {
+        optimizationMode: "detail",
+        encoderConfig: "1080p_1",
+      },
+      "disable"
+    );
+
+  // Use the track that works
+  const screenTrack = screenTrackWithAudio || screenTrackVideoOnly;
+  const screenError = screenVideoError; // Only show video errors
 
   console.log("Host agoraConfig:", agoraConfig);
   console.log("Host screenTrack:", screenTrack);
+  console.log("Screen audio error:", screenAudioError);
+
+  // Extract screen audio track if available
+  const screenAudioTrack =
+    screenTrackWithAudio && Array.isArray(screenTrackWithAudio)
+      ? (screenTrackWithAudio.find(
+          (track) => track.trackMediaType === "audio"
+        ) as ILocalAudioTrack | undefined)
+      : null;
 
   // Generate token when component mounts or when starting screen share
   useEffect(() => {
@@ -58,26 +86,30 @@ export default function Host() {
 
   const handleToggleScreenShare = () => {
     if (!screenShareOn) {
-      // Clear previous config to force token regeneration
       setAgoraConfig(null);
     }
     setScreenShareOn(!screenShareOn);
   };
 
-  // Check if we have audio and video tracks
-  const hasAudioTrack =
-    screenTrack && Array.isArray(screenTrack) && screenTrack.length > 1;
+  const handleMixedAudioChange = (mixedTrack: ILocalAudioTrack | null) => {
+    setMixedAudioTrack(mixedTrack);
+  };
+
+  // Check if we have video track
   const hasVideoTrack = screenTrack !== null;
+  const hasScreenAudio = !!screenAudioTrack;
+  const hasMixedAudio = !!mixedAudioTrack;
 
   return (
     <Suspense fallback={<div>Loading...</div>}>
-      <div className="flex flex-col items-center justify-center h-screen bg-gray-900 text-white">
-        <div className="mb-4 space-y-4 text-center">
-          <div className="bg-gray-800 p-6 rounded-lg max-w-md">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-900 text-white p-4">
+        <div className="mb-4 space-y-4 text-center max-w-md w-full">
+          <div className="bg-gray-800 p-6 rounded-lg">
             <h2 className="text-2xl font-bold mb-4">🎥 Host Control Panel</h2>
 
+            {/* Screen Share Button */}
             <button
-              className="btn px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed mb-4 w-full"
               onClick={handleToggleScreenShare}
               disabled={loading || (screenShareOn && !agoraConfig)}
             >
@@ -101,8 +133,8 @@ export default function Host() {
               </div>
             )}
 
-            {/* Track Status */}
-            {screenShareOn && screenTrack && (
+            {/* Broadcasting Status */}
+            {screenShareOn && (
               <div className="mt-4 space-y-2">
                 <div className="bg-gray-700 p-3 rounded">
                   <div className="text-sm font-semibold mb-2">
@@ -118,41 +150,53 @@ export default function Host() {
                     </div>
                     <div
                       className={
-                        hasAudioTrack ? "text-green-400" : "text-red-400"
+                        hasMixedAudio ? "text-green-400" : "text-yellow-400"
                       }
                     >
-                      🔊 Audio: {hasAudioTrack ? "Active" : "Inactive"}
+                      🔊 Audio:{" "}
+                      {hasMixedAudio ? "Mixed Audio Active" : "No Audio"}
                     </div>
                   </div>
                 </div>
-
-                {!hasAudioTrack && (
-                  <div className="bg-yellow-600 p-2 rounded text-xs">
-                    ⚠️ No audio detected. Make sure to select "Share audio" when
-                    sharing your screen.
-                  </div>
-                )}
               </div>
             )}
           </div>
+
+          {/* Audio Mixer */}
+          {screenShareOn && (
+            <AudioMixer
+              screenAudio={screenAudioTrack}
+              onMixedAudioChange={handleMixedAudioChange}
+              enabled={screenShareOn}
+            />
+          )}
+
+          {/* Show warning if screen audio isn't supported */}
+          {screenShareOn && screenAudioError && (
+            <div className="bg-yellow-600 p-3 rounded-lg text-sm">
+              ⚠️ Screen audio not supported on this browser/platform. You can
+              still use the microphone in the audio mixer.
+            </div>
+          )}
         </div>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-600 border border-red-400 text-white rounded max-w-md">
+          <div className="mb-4 p-3 bg-red-600 border border-red-400 text-white rounded max-w-md text-sm">
             {error}
           </div>
         )}
 
         {screenError && (
-          <div className="mb-4 p-3 bg-red-600 border border-red-400 text-white rounded max-w-md">
+          <div className="mb-4 p-3 bg-red-600 border border-red-400 text-white rounded max-w-md text-sm">
             Screen share error: {screenError.message}
           </div>
         )}
 
-        {agoraConfig && (
+        {agoraConfig && screenTrack && (
           <ScreenShare
             screenShareOn={screenShareOn}
             screenTrack={screenTrack}
+            mixedAudioTrack={mixedAudioTrack}
             agoraConfig={agoraConfig}
             onCloseScreenShare={() => setScreenShareOn(false)}
           />

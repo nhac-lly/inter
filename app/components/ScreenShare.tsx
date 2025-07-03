@@ -20,6 +20,7 @@ import type { AgoraTokenConfig } from "@/lib/server-actions";
 interface ShareScreenProps {
   screenShareOn: boolean;
   screenTrack: ILocalVideoTrack | [ILocalVideoTrack, ILocalAudioTrack] | null;
+  mixedAudioTrack?: ILocalAudioTrack | null;
   agoraConfig: AgoraTokenConfig;
   onCloseScreenShare?: () => void;
 }
@@ -27,6 +28,7 @@ interface ShareScreenProps {
 export const ScreenShare = ({
   screenShareOn,
   screenTrack,
+  mixedAudioTrack,
   agoraConfig,
   onCloseScreenShare,
 }: ShareScreenProps) => {
@@ -95,8 +97,13 @@ export const ScreenShare = ({
     }
   }, [screenTrack]);
 
-  //publish screen share - ensure both video and audio are published
-  const tracksToPublish = [screenVideoTrack, screenAudioTrack].filter(Boolean);
+  // Use mixed audio track if available, otherwise use screen audio
+  const audioTrackToPublish = mixedAudioTrack || screenAudioTrack;
+
+  //publish screen share - publish video and mixed audio
+  const tracksToPublish = [screenVideoTrack, audioTrackToPublish].filter(
+    Boolean
+  );
   usePublish(tracksToPublish, screenShareOn, client);
 
   // Log publishing status
@@ -104,13 +111,20 @@ export const ScreenShare = ({
     if (screenShareOn && tracksToPublish.length > 0) {
       console.log(`Publishing ${tracksToPublish.length} tracks:`, {
         video: !!screenVideoTrack,
-        audio: !!screenAudioTrack,
+        audio: !!audioTrackToPublish,
+        audioSource: mixedAudioTrack
+          ? "mixed"
+          : screenAudioTrack
+          ? "screen"
+          : "none",
       });
     }
   }, [
     screenShareOn,
     tracksToPublish.length,
     screenVideoTrack,
+    audioTrackToPublish,
+    mixedAudioTrack,
     screenAudioTrack,
   ]);
 
@@ -135,15 +149,22 @@ export const ScreenShare = ({
             {/* Audio indicator */}
             <div className="absolute top-4 right-4 bg-black bg-opacity-50 px-3 py-1 rounded-full">
               <span className="text-sm font-semibold text-white">
-                {screenAudioTrack ? "🔊 Audio Enabled" : "🔇 No Audio"}
+                {audioTrackToPublish
+                  ? mixedAudioTrack
+                    ? "🎚️ Mixed Audio"
+                    : "🔊 Screen Audio"
+                  : "🔇 No Audio"}
               </span>
             </div>
           </div>
         )}
 
         {/* Audio Track - Hidden but still published */}
-        {screenAudioTrack && (
-          <LocalAudioTrack disabled={!screenShareOn} track={screenAudioTrack} />
+        {audioTrackToPublish && (
+          <LocalAudioTrack
+            disabled={!screenShareOn}
+            track={audioTrackToPublish}
+          />
         )}
 
         {/* Publishing Status */}
@@ -151,7 +172,11 @@ export const ScreenShare = ({
           <div className="mt-4 text-center">
             <div className="bg-gray-800 px-4 py-2 rounded-lg text-sm">
               📡 Broadcasting: Video {screenVideoTrack ? "✅" : "❌"} | Audio{" "}
-              {screenAudioTrack ? "✅" : "❌"}
+              {audioTrackToPublish
+                ? mixedAudioTrack
+                  ? "🎚️ Mixed"
+                  : "🔊 Screen"
+                : "❌"}
             </div>
           </div>
         )}
