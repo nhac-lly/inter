@@ -29,7 +29,7 @@ export const ScreenShare = ({
   onCloseScreenShare,
 }: ShareScreenProps) => {
   const [client] = useState(() => {
-    const agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+    const agoraClient = AgoraRTC.createClient({ mode: "live", codec: "h265" });
 
     // Set client role as host for broadcasting
     agoraClient.setClientRole("host");

@@ -135,7 +135,7 @@ function LivestreamViewerInner({ client }: { client: IAgoraRTCClient }) {
 
 export default function LivestreamViewer() {
   const [client] = useState(() => {
-    const agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+    const agoraClient = AgoraRTC.createClient({ mode: "live", codec: "h265" });
 
     // Enable auto-subscription for better reliability
     // agoraClient.setClientRole("audience");
