@@ -9,15 +9,25 @@ import AgoraRTC, {
   useRemoteVideoTracks,
   IAgoraRTCClient,
 } from "agora-rtc-react";
-import { appConfig } from "@/config";
+import type { AgoraTokenConfig } from "@/lib/server-actions";
 
-function LivestreamViewerInner({ client }: { client: IAgoraRTCClient }) {
+interface LivestreamViewerProps {
+  agoraConfig: AgoraTokenConfig;
+}
+
+function LivestreamViewerInner({
+  client,
+  agoraConfig,
+}: {
+  client: IAgoraRTCClient;
+  agoraConfig: AgoraTokenConfig;
+}) {
   useJoin(
     {
-      appid: appConfig.appId,
-      channel: appConfig.channel,
-      token: appConfig.token,
-      uid: null,
+      appid: agoraConfig.appId,
+      channel: agoraConfig.channel,
+      token: agoraConfig.token,
+      uid: agoraConfig.uid,
     },
     true,
     client
@@ -78,7 +88,8 @@ function LivestreamViewerInner({ client }: { client: IAgoraRTCClient }) {
         <div className="bg-gray-800 rounded-lg p-6 max-w-2xl mx-auto">
           <h3 className="text-xl font-semibold mb-2">Welcome to the Stream!</h3>
           <p className="text-gray-300">
-            Channel A. Invite others to join and watch together!
+            Channel {agoraConfig.channel}. Invite others to join and watch
+            together!
           </p>
         </div>
       </div>
@@ -133,7 +144,9 @@ function LivestreamViewerInner({ client }: { client: IAgoraRTCClient }) {
   );
 }
 
-export default function LivestreamViewer() {
+export default function LivestreamViewer({
+  agoraConfig,
+}: LivestreamViewerProps) {
   const [client] = useState(() => {
     const agoraClient = AgoraRTC.createClient({ mode: "live", codec: "h265" });
 
@@ -154,7 +167,7 @@ export default function LivestreamViewer() {
 
   return (
     <AgoraRTCProvider client={client}>
-      <LivestreamViewerInner client={client} />
+      <LivestreamViewerInner client={client} agoraConfig={agoraConfig} />
     </AgoraRTCProvider>
   );
 }

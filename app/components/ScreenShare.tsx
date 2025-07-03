@@ -1,6 +1,5 @@
 "use client";
 
-import { appConfig } from "@/config";
 import type {
   ILocalAudioTrack,
   ILocalTrack,
@@ -16,20 +15,23 @@ import AgoraRTC, {
   useTrackEvent,
 } from "agora-rtc-react";
 import { useEffect, useState } from "react";
+import type { AgoraTokenConfig } from "@/lib/server-actions";
 
 interface ShareScreenProps {
   screenShareOn: boolean;
   screenTrack: ILocalVideoTrack | [ILocalVideoTrack, ILocalAudioTrack] | null;
+  agoraConfig: AgoraTokenConfig;
   onCloseScreenShare?: () => void;
 }
 
 export const ScreenShare = ({
   screenShareOn,
   screenTrack,
+  agoraConfig,
   onCloseScreenShare,
 }: ShareScreenProps) => {
   const [client] = useState(() => {
-    const agoraClient = AgoraRTC.createClient({ mode: "live", codec: "h265" });
+    const agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
 
     // Set client role as host for broadcasting
     agoraClient.setClientRole("host");
@@ -52,13 +54,13 @@ export const ScreenShare = ({
   const [screenAudioTrack, setScreenAudioTrack] =
     useState<ILocalAudioTrack | null>(null);
 
-  //join room
+  //join room using server-generated config
   useJoin(
     {
-      appid: appConfig.appId,
-      channel: appConfig.channel,
-      token: appConfig.token,
-      uid: 10,
+      appid: agoraConfig.appId,
+      channel: agoraConfig.channel,
+      token: agoraConfig.token,
+      uid: agoraConfig.uid,
     },
     screenShareOn,
     client
