@@ -7,6 +7,7 @@ import type {
   ILocalVideoTrack,
 } from "agora-rtc-react";
 import AgoraRTC, {
+  AgoraRTCProvider,
   AgoraRTCScreenShareProvider,
   LocalAudioTrack,
   LocalVideoTrack,
@@ -27,9 +28,23 @@ export const ScreenShare = ({
   screenTrack,
   onCloseScreenShare,
 }: ShareScreenProps) => {
-  const [client] = useState(() =>
-    AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
-  );
+  const [client] = useState(() => {
+    const agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+
+    // Set client role as host for broadcasting
+    agoraClient.setClientRole("host");
+
+    // Add event listeners for debugging
+    agoraClient.on("user-joined", (user) => {
+      console.log(`User ${user.uid} joined the channel`);
+    });
+
+    agoraClient.on("user-left", (user) => {
+      console.log(`User ${user.uid} left the channel`);
+    });
+
+    return agoraClient;
+  });
 
   //screen share
   const [screenVideoTrack, setScreenVideoTrack] =
@@ -82,19 +97,21 @@ export const ScreenShare = ({
   });
 
   return (
-    <AgoraRTCScreenShareProvider client={client}>
-      {screenShareOn && screenVideoTrack && (
-        <LocalVideoTrack
-          disabled={!screenShareOn}
-          play={screenShareOn}
-          style={{ width: "90vw", height: "90vh" }}
-          track={screenVideoTrack}
-        />
-      )}
-      {screenAudioTrack && (
-        <LocalAudioTrack disabled={!screenShareOn} track={screenAudioTrack} />
-      )}
-    </AgoraRTCScreenShareProvider>
+    <AgoraRTCProvider client={client}>
+      <AgoraRTCScreenShareProvider client={client}>
+        {screenShareOn && screenVideoTrack && (
+          <LocalVideoTrack
+            disabled={!screenShareOn}
+            play={screenShareOn}
+            style={{ width: "90vw", height: "90vh" }}
+            track={screenVideoTrack}
+          />
+        )}
+        {screenAudioTrack && (
+          <LocalAudioTrack disabled={!screenShareOn} track={screenAudioTrack} />
+        )}
+      </AgoraRTCScreenShareProvider>
+    </AgoraRTCProvider>
   );
 };
 

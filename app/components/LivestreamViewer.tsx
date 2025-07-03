@@ -1,11 +1,12 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import AgoraRTC, {
   AgoraRTCProvider,
   useJoin,
   useRemoteUsers,
   RemoteUser,
   useRemoteAudioTracks,
+  useRemoteVideoTracks,
   IAgoraRTCClient,
 } from "agora-rtc-react";
 import { appConfig } from "@/config";
@@ -23,10 +24,52 @@ function LivestreamViewerInner({ client }: { client: IAgoraRTCClient }) {
   );
 
   const remoteUsers = useRemoteUsers();
-  console.log([remoteUsers]);
+  console.log("Remote users:", remoteUsers);
+
   const { audioTracks } = useRemoteAudioTracks(remoteUsers);
-  audioTracks.map((track) => track.play());
+  const { videoTracks } = useRemoteVideoTracks(remoteUsers);
+
+  // Play audio tracks
+  useEffect(() => {
+    audioTracks.forEach((track) => {
+      track.play();
+    });
+  }, [audioTracks]);
+
+  // Log video tracks for debugging
+  useEffect(() => {
+    console.log("Video tracks:", videoTracks);
+  }, [videoTracks]);
+
   const hostUser = remoteUsers.find((user) => !!user.videoTrack);
+
+  // Force subscription to all remote users
+  useEffect(() => {
+    remoteUsers.forEach(async (user) => {
+      if (user.videoTrack && !user.videoTrack.isPlaying) {
+        try {
+          await client.subscribe(user, "video");
+          console.log(`Subscribed to video from user ${user.uid}`);
+        } catch (error) {
+          console.error(
+            `Failed to subscribe to video from user ${user.uid}:`,
+            error
+          );
+        }
+      }
+      if (user.audioTrack && !user.audioTrack.isPlaying) {
+        try {
+          await client.subscribe(user, "audio");
+          console.log(`Subscribed to audio from user ${user.uid}`);
+        } catch (error) {
+          console.error(
+            `Failed to subscribe to audio from user ${user.uid}:`,
+            error
+          );
+        }
+      }
+    });
+  }, [remoteUsers, client]);
 
   return (
     <>
@@ -44,8 +87,16 @@ function LivestreamViewerInner({ client }: { client: IAgoraRTCClient }) {
       <div className="flex justify-center mb-4">
         <div className="bg-green-600 px-4 py-2 rounded-full">
           <span className="text-sm font-semibold">
-            👥 {remoteUsers.length} Guests
+            👥 {remoteUsers.length} Guests Connected
           </span>
+        </div>
+      </div>
+
+      {/* Debug Info */}
+      <div className="flex justify-center mb-4">
+        <div className="bg-blue-600 px-4 py-2 rounded-full text-xs">
+          Video Tracks: {videoTracks.length} | Audio Tracks:{" "}
+          {audioTracks.length}
         </div>
       </div>
 
@@ -83,9 +134,23 @@ function LivestreamViewerInner({ client }: { client: IAgoraRTCClient }) {
 }
 
 export default function LivestreamViewer() {
-  const [client] = useState(() =>
-    AgoraRTC.createClient({ mode: "rtc", codec: "vp8" })
-  );
+  const [client] = useState(() => {
+    const agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
+
+    // Enable auto-subscription for better reliability
+    // agoraClient.setClientRole("audience");
+
+    // Add event listeners for debugging
+    agoraClient.on("user-published", (user, mediaType) => {
+      console.log(`User ${user.uid} published ${mediaType}`);
+    });
+
+    agoraClient.on("user-unpublished", (user, mediaType) => {
+      console.log(`User ${user.uid} unpublished ${mediaType}`);
+    });
+
+    return agoraClient;
+  });
 
   return (
     <AgoraRTCProvider client={client}>
