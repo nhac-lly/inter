@@ -224,6 +224,9 @@ export default function Host() {
             },
             recordingConfig: {
               channelType: 1,
+              subscribeUidGroup: 0,
+              subscribeAudioUids: [uid],
+              subscribeVideoUids: [uid],
             },
           },
         }),
