@@ -218,8 +218,8 @@ export default function Host() {
             token: token,
             storageConfig: {
               secretKey: appConfig.secretKey,
-              vendor: 1,
-              region: 8,
+              vendor: 0,
+              region: 9,
               bucket: appConfig.bucket,
               accessKey: appConfig.accessKey,
               endpoint: appConfig.endpoint,
