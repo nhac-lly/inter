@@ -209,9 +209,6 @@ export default function LivestreamViewer({
   const [client] = useState(() => {
     const agoraClient = AgoraRTC.createClient({ mode: "live", codec: "h265" });
 
-    // Set client role as audience for proper subscription
-    agoraClient.setClientRole("audience");
-
     // Add event listeners for debugging
     agoraClient.on("user-published", (user, mediaType) => {
       console.log(`User ${user.uid} published ${mediaType}`);

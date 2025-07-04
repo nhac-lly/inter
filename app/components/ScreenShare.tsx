@@ -35,9 +35,6 @@ export const ScreenShare = ({
   const [client] = useState(() => {
     const agoraClient = AgoraRTC.createClient({ mode: "rtc", codec: "vp8" });
 
-    // Set client role as host for broadcasting
-    agoraClient.setClientRole("host");
-
     // Add event listeners for debugging
     agoraClient.on("user-joined", (user) => {
       console.log(`User ${user.uid} joined the channel`);

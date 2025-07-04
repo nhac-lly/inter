@@ -88,3 +88,7 @@ export async function generateViewerToken(channel: string, uid: number | null = 
 export async function getDefaultChannel(): Promise<string> {
   return appConfig.channel || 'default-channel';
 } 
+
+export async function getAppConfig(): Promise<typeof appConfig> {
+  return appConfig || {}
+}
