@@ -223,7 +223,7 @@ export default function Host() {
               accessKey: appConfig.accessKey,
             },
             recordingConfig: {
-              channelType: 0,
+              channelType: 1,
             },
           },
         }),
