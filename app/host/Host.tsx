@@ -147,6 +147,7 @@ export default function Host() {
   const hasScreenAudio = !!screenAudioTrack;
   const hasMixedAudio = !!mixedAudioTrack;
 
+  // move later to server to hide Basic
   // Client-side Cloud Recording API functions
   const acquireCloudRecording = async (
     channel: string,
