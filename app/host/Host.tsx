@@ -223,6 +223,7 @@ export default function Host() {
               bucket: appConfig.bucket,
               accessKey: appConfig.accessKey,
               endpoint: appConfig.endpoint,
+              fileNamePrefix: ["agora"],
             },
             recordingConfig: {
               channelType: 1,
