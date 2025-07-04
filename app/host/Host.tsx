@@ -30,6 +30,7 @@ interface AppConfig {
   secretKey: string;
   accessKey: string;
   bucket: string;
+  endpoint: string;
 }
 
 export default function Host() {
@@ -217,10 +218,11 @@ export default function Host() {
             token: token,
             storageConfig: {
               secretKey: appConfig.secretKey,
-              vendor: 0,
-              region: 0,
+              vendor: 1,
+              region: 8,
               bucket: appConfig.bucket,
               accessKey: appConfig.accessKey,
+              endpoint: appConfig.endpoint,
             },
             recordingConfig: {
               channelType: 1,
