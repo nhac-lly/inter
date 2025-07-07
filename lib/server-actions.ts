@@ -128,7 +128,6 @@ export async function createMediaPushConverter(
                 rtcStreamUids: [Number(uid)],
               },
               videoOptions: {
-                codecProfile: "High", 
                 frameRate: 30,
                 bitrate: 10000,
                 rtcStreamUids: [Number(uid)],
