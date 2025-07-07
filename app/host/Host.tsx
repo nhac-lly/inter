@@ -7,6 +7,8 @@ import {
   generateHostToken,
   getAppConfig,
   getDefaultChannel,
+  createMediaPushConverter,
+  stopMediaPushConverter,
   type AgoraTokenConfig,
 } from "@/lib/server-actions";
 import { AudioMixer } from "@/app/components/AudioMixer";
@@ -306,116 +308,6 @@ export default function Host() {
     console.log("Stop recording response:", data);
   };
 
-  // Media Push functions for CDN streaming
-  const createMediaPushConverter = async (
-    channel: string,
-    token: string,
-    uid: string = "10",
-    rtmpUrl: string
-  ): Promise<string> => {
-    if (!appConfig) throw new Error("App config not loaded");
-
-    console.log("Creating media push converter for:", {
-      channel,
-      uid,
-      rtmpUrl,
-    });
-
-    const response = await fetch(
-      `https://api.agora.io/ap/v1/projects/${appConfig.appId}/rtmp-converters`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Basic ${appConfig.agoraAuth}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          converter: {
-            name: `stream_${channel}_${uid}_${Date.now()}`,
-            transcodeOptions: {
-              rtcChannel: channel,
-              audioOptions: {
-                rtcStreamUids: [Number(uid)],
-              },
-              videoOptions: {
-                bitrate: 10000,
-                rtcStreamUids: [Number(uid)],
-                canvas: {
-                  width: 1920,
-                  height: 1080,
-                  color: 0,
-                },
-                layout: [
-                  {
-                    rtcStreamUid: Number(uid),
-                    region: {
-                      xPos: 0,
-                      yPos: 0,
-                      zIndex: 1,
-                      zOrder: 1,
-                      width: 1,
-                      height: 1,
-                    },
-                  },
-                ],
-              },
-            },
-            rtmpUrl: rtmpUrl,
-            idleTimeout: 300,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Create converter error response:", errorData);
-      throw new Error(
-        `Failed to create media push converter: ${
-          errorData.reason || response.status
-        }`
-      );
-    }
-
-    const data = await response.json();
-    console.log("Create converter response:", data);
-
-    if (!data.converterId) {
-      throw new Error("No converterId returned from create request");
-    }
-
-    return data.converterId;
-  };
-
-  const stopMediaPushConverter = async (converterId: string): Promise<void> => {
-    if (!appConfig) throw new Error("App config not loaded");
-
-    console.log("Stopping media push converter:", { converterId });
-
-    const response = await fetch(
-      `https://api.agora.io/ap/v1/projects/${appConfig.appId}/rtmp-converters/${converterId}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Basic ${appConfig.agoraAuth}`,
-          "Content-Type": "application/json",
-        },
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      console.error("Stop converter error response:", errorData);
-      throw new Error(
-        `Failed to stop media push converter: ${
-          errorData.reason || response.status
-        }`
-      );
-    }
-
-    console.log("Media push converter stopped successfully");
-  };
-
   // Streaming workflow functions
   const startStreaming = async () => {
     if (!agoraConfig) {
@@ -678,9 +570,7 @@ export default function Host() {
                   📡 CDN Streaming Active
                 </div>
                 <div>🔗 RTMP Endpoint: Your CDN</div>
-                <div>
-                  🆔 Converter: {mediaPushConfig.converterId?.slice(0, 8)}...
-                </div>
+                <div>🆔 Converter: {mediaPushConfig.converterId}</div>
                 <div className="text-purple-300 mt-1">
                   Live stream broadcasting to your CDN
                 </div>

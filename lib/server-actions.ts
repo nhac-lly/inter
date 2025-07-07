@@ -92,3 +92,128 @@ export async function getDefaultChannel(): Promise<string> {
 export async function getAppConfig(): Promise<typeof appConfig> {
   return appConfig || {}
 }
+
+// Media Push functions for CDN streaming
+export async function createMediaPushConverter(
+  channel: string,
+  token: string,
+  uid: string,
+  rtmpUrl: string
+): Promise<string> {
+  try {
+    if (!appConfig.appId || !appConfig.agoraAuth) {
+      throw new Error('Server configuration missing: APP_ID or AGORA_AUTH not set');
+    }
+
+    console.log('Creating media push converter for:', {
+      channel,
+      uid,
+      rtmpUrl: rtmpUrl.substring(0, 50) + '...', // Log partial URL for security
+    });
+
+    const response = await fetch(
+      `https://api.agora.io/ap/v1/projects/${appConfig.appId}/rtmp-converters`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Basic ${appConfig.agoraAuth}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          converter: {
+            name: `stream_${channel}_${uid}_${Date.now()}`,
+            transcodeOptions: {
+              rtcChannel: channel,
+              audioOptions: {
+                rtcStreamUids: [Number(uid)],
+              },
+              videoOptions: {
+                codecProfile: "High", 
+                frameRate: 30,
+                bitrate: 10000,
+                rtcStreamUids: [Number(uid)],
+                canvas: {
+                  width: 1920,
+                  height: 1080,
+                },
+                layout: [
+                  {
+                    rtcStreamUid: Number(uid),
+                    region: {
+                      xPos: 0,
+                      yPos: 0,
+                      zIndex: 1,
+                      width: 1920,
+                      height: 1080,
+                    },
+                    fillMode: 'fill',
+                  },
+                ],
+              },
+            },
+            rtmpUrl: rtmpUrl,
+            idleTimeout: 300,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Create converter error response:', errorData);
+      throw new Error(
+        `Failed to create media push converter: ${
+          errorData.reason || response.status
+        }`
+      );
+    }
+
+    const data = await response.json();
+    console.log('Create converter response:', data);
+
+    if (!data.converter.id) {
+      throw new Error('No converterId returned from create request');
+    }
+
+    return data.converter.id;
+  } catch (error) {
+    console.error('Error creating media push converter:', error);
+    throw error;
+  }
+}
+
+export async function stopMediaPushConverter(converterId: string): Promise<void> {
+  try {
+    if (!appConfig.appId || !appConfig.agoraAuth) {
+      throw new Error('Server configuration missing: APP_ID or AGORA_AUTH not set');
+    }
+
+    console.log('Stopping media push converter:', { converterId });
+
+    const response = await fetch(
+      `https://api.agora.io/ap/v1/projects/${appConfig.appId}/rtmp-converters/${converterId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Basic ${appConfig.agoraAuth}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Stop converter error response:', errorData);
+      throw new Error(
+        `Failed to stop media push converter: ${
+          errorData.reason || response.status
+        }`
+      );
+    }
+
+    console.log('Media push converter stopped successfully');
+  } catch (error) {
+    console.error('Error stopping media push converter:', error);
+    throw error;
+  }
+}
