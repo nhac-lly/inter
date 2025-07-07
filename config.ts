@@ -16,4 +16,5 @@ export const appConfig = {
   accessKey: process.env.ACCESS_KEY || "",
   bucket: process.env.BUCKET || "",
   endpoint: process.env.S3_ENDPOINT || "hcm03.vstorage.vngcloud.vn",
+  cdnRtmpUrl: process.env.CDN_RTMP_URL || "",
 };

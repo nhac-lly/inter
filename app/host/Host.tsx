@@ -31,6 +31,7 @@ interface AppConfig {
   accessKey: string;
   bucket: string;
   endpoint: string;
+  cdnRtmpUrl: string;
 }
 
 export default function Host() {
@@ -50,6 +51,14 @@ export default function Host() {
 
   // App config state
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
+
+  // Media Push state (for CDN streaming)
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamingError, setStreamingError] = useState<string | null>(null);
+  const [streamingLoading, setStreamingLoading] = useState(false);
+  const [mediaPushConfig, setMediaPushConfig] = useState<{
+    converterId: string;
+  } | null>(null);
 
   // Fetch app config on mount
   useEffect(() => {
@@ -297,6 +306,184 @@ export default function Host() {
     console.log("Stop recording response:", data);
   };
 
+  // Media Push functions for CDN streaming
+  const createMediaPushConverter = async (
+    channel: string,
+    token: string,
+    uid: string = "10",
+    rtmpUrl: string
+  ): Promise<string> => {
+    if (!appConfig) throw new Error("App config not loaded");
+
+    console.log("Creating media push converter for:", {
+      channel,
+      uid,
+      rtmpUrl,
+    });
+
+    const response = await fetch(
+      `https://api.agora.io/ap/v1/projects/${appConfig.appId}/rtmp-converters`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${appConfig.agoraAuth}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          converter: {
+            name: `stream_${channel}_${uid}_${Date.now()}`,
+            transcodeOptions: {
+              rtcChannel: channel,
+              audioOptions: {
+                rtcStreamUids: [Number(uid)],
+              },
+              videoOptions: {
+                bitrate: 10000,
+                rtcStreamUids: [Number(uid)],
+                canvas: {
+                  width: 1920,
+                  height: 1080,
+                  color: 0,
+                },
+                layout: [
+                  {
+                    rtcStreamUid: Number(uid),
+                    region: {
+                      xPos: 0,
+                      yPos: 0,
+                      zIndex: 1,
+                      zOrder: 1,
+                      width: 1,
+                      height: 1,
+                    },
+                  },
+                ],
+              },
+            },
+            rtmpUrl: rtmpUrl,
+            idleTimeout: 300,
+          },
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Create converter error response:", errorData);
+      throw new Error(
+        `Failed to create media push converter: ${
+          errorData.reason || response.status
+        }`
+      );
+    }
+
+    const data = await response.json();
+    console.log("Create converter response:", data);
+
+    if (!data.converterId) {
+      throw new Error("No converterId returned from create request");
+    }
+
+    return data.converterId;
+  };
+
+  const stopMediaPushConverter = async (converterId: string): Promise<void> => {
+    if (!appConfig) throw new Error("App config not loaded");
+
+    console.log("Stopping media push converter:", { converterId });
+
+    const response = await fetch(
+      `https://api.agora.io/ap/v1/projects/${appConfig.appId}/rtmp-converters/${converterId}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Basic ${appConfig.agoraAuth}`,
+          "Content-Type": "application/json",
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error("Stop converter error response:", errorData);
+      throw new Error(
+        `Failed to stop media push converter: ${
+          errorData.reason || response.status
+        }`
+      );
+    }
+
+    console.log("Media push converter stopped successfully");
+  };
+
+  // Streaming workflow functions
+  const startStreaming = async () => {
+    if (!agoraConfig) {
+      setStreamingError("No streaming session available");
+      return;
+    }
+
+    if (!appConfig?.cdnRtmpUrl) {
+      setStreamingError("CDN RTMP URL not configured");
+      return;
+    }
+
+    try {
+      setStreamingError(null);
+      setStreamingLoading(true);
+
+      console.log("Starting media push to CDN...");
+
+      // Create media push converter
+      const converterId = await createMediaPushConverter(
+        agoraConfig.channel,
+        agoraConfig.token,
+        agoraConfig.uid.toString(),
+        appConfig.cdnRtmpUrl
+      );
+      console.log("Created converter with ID:", converterId);
+
+      // Update state
+      setMediaPushConfig({ converterId });
+      setIsStreaming(true);
+      console.log("Media push to CDN started successfully");
+    } catch (error) {
+      console.error("Failed to start media push:", error);
+      setStreamingError(
+        "Failed to start CDN streaming: " + (error as Error).message
+      );
+    } finally {
+      setStreamingLoading(false);
+    }
+  };
+
+  const stopStreaming = async () => {
+    if (!mediaPushConfig) {
+      setStreamingError("No active streaming session");
+      return;
+    }
+
+    try {
+      setStreamingError(null);
+      setStreamingLoading(true);
+
+      console.log("Stopping media push to CDN...");
+
+      await stopMediaPushConverter(mediaPushConfig.converterId);
+
+      setMediaPushConfig(null);
+      setIsStreaming(false);
+      console.log("Media push to CDN stopped successfully");
+    } catch (error) {
+      console.error("Failed to stop media push:", error);
+      setStreamingError(
+        "Failed to stop CDN streaming: " + (error as Error).message
+      );
+    } finally {
+      setStreamingLoading(false);
+    }
+  };
+
   // Recording functions
   const startRecording = async () => {
     if (!agoraConfig) {
@@ -382,6 +569,14 @@ export default function Host() {
     }
   }, [screenShareOn, isRecording, cloudRecording]);
 
+  // Clean up streaming if screen share stops
+  useEffect(() => {
+    if (!screenShareOn && isStreaming && mediaPushConfig) {
+      console.log("Screen share stopped, stopping CDN streaming...");
+      stopStreaming();
+    }
+  }, [screenShareOn, isStreaming, mediaPushConfig]);
+
   // Show loading state while config is being fetched
   if (!appConfig) {
     return (
@@ -438,6 +633,30 @@ export default function Host() {
               </button>
             )}
 
+            {/* CDN Streaming Button - Only show when streaming */}
+            {screenShareOn && agoraConfig && hasVideoTrack && (
+              <button
+                className={`btn px-6 py-3 text-white rounded-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed mb-4 w-full ${
+                  isStreaming
+                    ? "bg-red-600 hover:bg-red-700"
+                    : "bg-purple-600 hover:bg-purple-700"
+                }`}
+                onClick={isStreaming ? stopStreaming : startStreaming}
+                disabled={streamingLoading || !screenShareOn || !hasVideoTrack}
+              >
+                {streamingLoading ? (
+                  <>⏳ Processing...</>
+                ) : isStreaming ? (
+                  <>
+                    <span className="animate-pulse mr-2">🔴</span>
+                    Stop CDN Streaming
+                  </>
+                ) : (
+                  <>📡 Start CDN Streaming</>
+                )}
+              </button>
+            )}
+
             {/* Recording Info */}
             {isRecording && cloudRecording && appConfig && (
               <div className="mt-4 text-xs text-gray-300 bg-green-800 p-3 rounded border border-green-600">
@@ -448,6 +667,22 @@ export default function Host() {
                 <div>🆔 Session: {cloudRecording.sid?.slice(0, 8)}...</div>
                 <div className="text-green-300 mt-1">
                   Files will be automatically saved to S3
+                </div>
+              </div>
+            )}
+
+            {/* Streaming Status */}
+            {isStreaming && mediaPushConfig && (
+              <div className="mt-4 text-xs text-gray-300 bg-purple-800 p-3 rounded border border-purple-600">
+                <div className="font-semibold text-purple-200 mb-1">
+                  📡 CDN Streaming Active
+                </div>
+                <div>🔗 RTMP Endpoint: Your CDN</div>
+                <div>
+                  🆔 Converter: {mediaPushConfig.converterId?.slice(0, 8)}...
+                </div>
+                <div className="text-purple-300 mt-1">
+                  Live stream broadcasting to your CDN
                 </div>
               </div>
             )}
@@ -494,6 +729,12 @@ export default function Host() {
                         Recording Active
                       </div>
                     )}
+                    {isStreaming && (
+                      <div className="text-purple-400">
+                        <span className="animate-pulse">📡</span> CDN Streaming
+                        Active
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -533,6 +774,12 @@ export default function Host() {
         {recordingError && (
           <div className="mb-4 p-3 bg-red-600 border border-red-400 text-white rounded max-w-md text-sm">
             Recording Error: {recordingError}
+          </div>
+        )}
+
+        {streamingError && (
+          <div className="mb-4 p-3 bg-red-600 border border-red-400 text-white rounded max-w-md text-sm">
+            Streaming Error: {streamingError}
           </div>
         )}
 
