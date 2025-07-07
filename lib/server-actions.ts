@@ -129,11 +129,11 @@ export async function createMediaPushConverter(
               },
               videoOptions: {
                 frameRate: 30,
-                bitrate: 10000,
+                bitrate: 500,
                 rtcStreamUids: [Number(uid)],
                 canvas: {
-                  width: 1920,
-                  height: 1080,
+                  width: 1280,
+                  height: 720,
                 },
                 layout: [
                   {
@@ -142,8 +142,8 @@ export async function createMediaPushConverter(
                       xPos: 0,
                       yPos: 0,
                       zIndex: 1,
-                      width: 1920,
-                      height: 1080,
+                      width: 1280,
+                      height: 720,
                     },
                     fillMode: 'fill',
                   },
